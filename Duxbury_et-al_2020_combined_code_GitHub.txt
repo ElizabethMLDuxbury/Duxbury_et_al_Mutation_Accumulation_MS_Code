@@ -1,0 +1,486 @@
+#Code for analyses in Duxbury et al. manuscript entitled "Reduced insulin signalling in adulthood protects soma and germline under mutation accumulation"
+
+##Survival analysis for intergenerational experiment
+###Load in packages
+library(survival)
+library(bbmle) ##for AICtab
+library(coxme)
+###Set working directory and load in data
+
+###Survival analysis with matricide censored
+Model1<-coxme(Surv(UVP1survdata$Age.at.death,UVP1survdata$Status)~UVP1survdata$Strain*UVP1survdata$UV.trt+(1|UVP1survdata$Plate))
+summary(Model1)
+Model1a<-coxme(Surv(UVP1survdata$Age.at.death,UVP1survdata$Status)~UVP1survdata$Strain+UVP1survdata$UV.trt+(1|UVP1survdata$Plate))
+summary(Model1a)
+Model1b<-coxme(Surv(UVP1survdata$Age.at.death,UVP1survdata$Status)~UVP1survdata$Strain+(1|UVP1survdata$Plate))
+summary(Model1b)
+
+###Survival analysis with coxme including matricides as dead
+Model2<-coxme(Surv(UVP1survdatamatri$Age.at.death,UVP1survdatamatri$Status)~UVP1survdatamatri$Strain*UVP1survdatamatri$UV.trt+(1|UVP1survdatamatri$Plate))
+summary(Model2)
+Model2a<-coxme(Surv(UVP1survdatamatri$Age.at.death,UVP1survdatamatri$Status)~UVP1survdatamatri$Strain+UVP1survdatamatri$UV.trt+(1|UVP1survdatamatri$Plate))
+summary(Model2a)
+Model2b<-coxme(Surv(UVP1survdatamatri$Age.at.death,UVP1survdatamatri$Status)~UVP1survdatamatri$Strain+(1|UVP1survdatamatri$Plate))
+summary(Model2b)
+
+##Age-specific reproduction analysis for intergenerational experiment -> same format used for parental and offspring generation data 
+###Load in packages
+library(lme4) ##for glmer
+library(lmerTest) ##anova & summary tables for fixed & random effects, for model simplification
+library(car) ##anova tables, plots for applied regression
+library(blmeco) ##functions accompanying book "Bayesian data analysis in ecology using R, BUGS & Stan"
+library(popbio) ##construction & analysis of matrix popoulation models e.g. for lambda
+library(XLConnect) ##Excel connector for modifying and querying Excel file (error produced)
+library(glmmTMB) ##glmm using template model builder; incl more families, zero infl, nested or crossed rand effects, "dispersion model" for fixed effects
+library(DHARMa) ##residual diagnostics for hierarchical (multi-level/mixed) regression models; incl dispersion test and zero inflation test for glmmTMB
+library(bbmle) ##for AICtab
+library(ggplot2)
+library(ggpubr) # to pt together multiple graphs in one
+library(gridExtra) #to pt together multiple graphs in one
+library(cowplot)
+library(grid)
+###Set working directory and load in data
+
+###Age-specific reproduction analysis with glmmTMB
+####Poisson
+p11<-glmmTMB(parent.D2to4$Off.count~parent.D2to4$Strain*parent.D2to4$UV.trt*parent.D2to4$Day+parent.D2to4$Strain*parent.D2to4$UV.trt*I(parent.D2to4$Day^2)+(1|parent.D2to4$Plate.Id)+(1|parent.D2to4$Experimenter),family='poisson') #full model
+summary(p11) 
+p12<-glmmTMB(parent.D2to4$Off.count~parent.D2to4$Strain:parent.D2to4$UV.trt+parent.D2to4$Strain:parent.D2to4$Day+parent.D2to4$UV.trt:parent.D2to4$Day+parent.D2to4$UV.trt:I(parent.D2to4$Day^2)+parent.D2to4$Strain:I(parent.D2to4$Day^2)+parent.D2to4$Strain+parent.D2to4$UV.trt+parent.D2to4$Day+I(parent.D2to4$Day^2)+(1|parent.D2to4$Plate.Id)+(1|parent.D2to4$Experimenter),family='poisson') 
+summary(p12)
+anova(p11,p12) 
+AICtab(p11,p12)
+AICctab(p11,p12) 
+p13<-glmmTMB(parent.D2to4$Off.count~parent.D2to4$Strain*parent.D2to4$UV.trt*parent.D2to4$Day+parent.D2to4$Strain:parent.D2to4$UV.trt+parent.D2to4$Strain:parent.D2to4$Day+parent.D2to4$UV.trt:parent.D2to4$Day+parent.D2to4$UV.trt:I(parent.D2to4$Day^2)+parent.D2to4$Strain:I(parent.D2to4$Day^2)+parent.D2to4$Strain+parent.D2to4$UV.trt+parent.D2to4$Day+I(parent.D2to4$Day^2)+(1|parent.D2to4$Plate.Id)+(1|parent.D2to4$Experimenter),family='poisson') 
+summary(p13)
+anova(p11,p13) 
+AICtab(p11,p13)
+AICctab(p11,p13)
+AICtab(p11,p12,p13)
+AICctab(p11,p12,p13) 
+
+####Check for dispersion of top model 
+simulationOutput <- simulateResiduals(fittedModel = p13, n = 1000) #this takes > 5 min, 1000 simulations gives higher precision than the default of n=250 
+testDispersion(simulationOutput = simulationOutput, alternative ="two.sided") #testing for over- or under-dispersion
+
+####Zero-Inflated Poisson
+zip14<-glmmTMB(parent.D2to4$Off.count~parent.D2to4$Strain*parent.D2to4$UV.trt*parent.D2to4$Day+parent.D2to4$Strain*parent.D2to4$UV.trt*I(parent.D2to4$Day^2)+(1|parent.D2to4$Plate.Id)+(1|parent.D2to4$Experimenter),zi=~parent.D2to4$Day+I(parent.D2to4$Day^2),family='poisson') #zi with day and day^2, convergence problem
+summary(zip14) 
+zip15<-glmmTMB(parent.D2to4$Off.count~parent.D2to4$Strain*parent.D2to4$UV.trt*parent.D2to4$Day+parent.D2to4$Strain*parent.D2to4$UV.trt*I(parent.D2to4$Day^2)+(1|parent.D2to4$Plate.Id)+(1|parent.D2to4$Experimenter),zi=~parent.D2to4$Day,family='poisson') #zi with just day, still convergence prob, so keep in day^2
+summary(zip15) 
+zip16<-glmmTMB(parent.D2to4$Off.count~parent.D2to4$Strain*parent.D2to4$UV.trt*parent.D2to4$Day+parent.D2to4$Strain:parent.D2to4$UV.trt+parent.D2to4$Strain:parent.D2to4$Day+parent.D2to4$UV.trt:parent.D2to4$Day+parent.D2to4$UV.trt:I(parent.D2to4$Day^2)+parent.D2to4$Strain:I(parent.D2to4$Day^2)+parent.D2to4$Strain+parent.D2to4$UV.trt+parent.D2to4$Day+I(parent.D2to4$Day^2)+(1|parent.D2to4$Plate.Id)+(1|parent.D2to4$Experimenter),zi=~parent.D2to4$Day,family='poisson') #take 3-way with day^2 out of conditional, keep day^2 in zi, still convergence problem
+summary(zip16)
+
+###Generalised Poisson (GP)
+gp11<-glmmTMB(parent.D2to4$Off.count~parent.D2to4$Strain*parent.D2to4$UV.trt*parent.D2to4$Day+parent.D2to4$Strain*parent.D2to4$UV.trt*I(parent.D2to4$Day^2)+(1|parent.D2to4$Plate.Id)+(1|parent.D2to4$Experimenter), family='genpois') 
+summary(gp11)
+AICtab(p13,gp11)
+gp12<-glmmTMB(parent.D2to4$Off.count~parent.D2to4$Strain*parent.D2to4$UV.trt*parent.D2to4$Day+parent.D2to4$Strain:parent.D2to4$UV.trt+parent.D2to4$Strain:parent.D2to4$Day+parent.D2to4$UV.trt:parent.D2to4$Day+parent.D2to4$UV.trt:I(parent.D2to4$Day^2)+parent.D2to4$Strain:I(parent.D2to4$Day^2)+parent.D2to4$Strain+parent.D2to4$UV.trt+parent.D2to4$Day+I(parent.D2to4$Day^2)+(1|parent.D2to4$Plate.Id)+(1|parent.D2to4$Experimenter), family='genpois') 
+summary(gp12)
+anova(gp11,gp12)
+AICtab(gp11,gp12)
+AICctab(gp11,gp12)
+
+##Check for (under-)dispersion of top model  
+simulationOutput <- simulateResiduals(fittedModel = gp12, n = 1000) #this takes > 5 min, 1000 simulations gives higher precision than the default of n=250 
+testDispersion(simulationOutput = simulationOutput, alternative ="two.sided")
+
+##Zero-Inflated GP
+zigp11<-glmmTMB(parent.D2to4$Off.count~parent.D2to4$Strain*parent.D2to4$UV.trt*parent.D2to4$Day+parent.D2to4$Strain*parent.D2to4$UV.trt*I(parent.D2to4$Day^2)+(1|parent.D2to4$Plate.Id)+(1|parent.D2to4$Experimenter),zi=~parent.D2to4$Day+I(parent.D2to4$Day^2),family='genpois') #zi with day and day^2, convergence problem
+summary(zigp11) 
+zigp12<-glmmTMB(parent.D2to4$Off.count~parent.D2to4$Strain*parent.D2to4$UV.trt*parent.D2to4$Day+parent.D2to4$Strain*parent.D2to4$UV.trt*I(parent.D2to4$Day^2)+(1|parent.D2to4$Plate.Id)+(1|parent.D2to4$Experimenter),zi=~parent.D2to4$Day,family='genpois') #try with just day in zi, still convergence problem
+summary(zigp12)
+zigp13<-glmmTMB(parent.D2to4$Off.count~parent.D2to4$Strain*parent.D2to4$UV.trt*parent.D2to4$Day+parent.D2to4$Strain:parent.D2to4$UV.trt+parent.D2to4$Strain:parent.D2to4$Day+parent.D2to4$UV.trt:parent.D2to4$Day+parent.D2to4$UV.trt:I(parent.D2to4$Day^2)+parent.D2to4$Strain:I(parent.D2to4$Day^2)+parent.D2to4$Strain+parent.D2to4$UV.trt+parent.D2to4$Day+I(parent.D2to4$Day^2)+(1|parent.D2to4$Plate.Id)+(1|parent.D2to4$Experimenter), zi=~parent.D2to4$Day+I(parent.D2to4$Day^2),family='genpois') #took out 3-way with day^2 in conditional part, still convergence problem 
+summary(zigp13)
+####Compare all models so far that converged
+AICtab(p11,p12,p13,gp11,gp12) #gp12 is best
+summary(gp12)
+
+##Fitness calculation and analysis for intergenerational experiment -> same format used for parental and offspring generation data
+###Using age-specific reproduction data 
+
+###Calculated with D1-4 data -> only the first few days of reproduction are important for fitness, and almost zero reroduction for D5&6, so only use day 1-4
+
+###make a new 'PLATE' identifier, useful for later lambda analysis
+offspr.D1to4$PLATE<-paste(offspr.D1to4$Strain, offspr.D1to4$UV.trt, offspr.D1to4$Plate.Id) 
+
+###sort data per "individual", each day after each other, in prep. for adding into the matrix, in order, via the loop below
+lambda.data<-as.data.frame.table(with(offspr.D1to4,tapply(Off.count,list(Day,PLATE),sum))) 
+names(lambda.data)<-c("Day","Plate","Fecundity")
+head(lambda.data)
+lambda.data[is.na(lambda.data)] <- 0 #Replace all NA with 0, so I can include them in the lambda analysis.
+
+###count the number of plates in your dataset
+no.plates<-length(levels(lambda.data$Plate))
+lambda<-c(rep(NA,1,no.plates)) ##creates a vector of NAs the same length as your dataset
+
+#Now make the Leslie matrix
+#age specific fertilities along first row
+#age specific survival along subdiagonal
+#diag(x=1, nrow, ncol)
+#number of days of reproduction + 2 (egg-L4) as number of columns
+#number of days of reproduction + 1 as number of rows
+
+survival.matrix<-diag(1,5,6) ##builds a matrix with 5 rows and 6 columns and a diagonal of 1s (everything else is zero)
+survival.matrix
+
+##for each plate in turn, leave 2 gaps (for development) and then insert its D1-4 fecundity into/along the top of the survival matrix, making use of the vector of NAs, to insert in the values and calculate lambda from this matrix. Lambda for each individual is estimated by solving the Euler-Lotka equation using the lambda function from the popbio package.
+
+#Fill in the matrix with lambda using the package popbio.
+#The first two days of life (egg-L4) have reproduction 0. 
+
+for (i in levels(lambda.data$Plate)) {
+  data_tmp<-lambda.data[lambda.data$Plate==i,]
+  reg_result<-lambda(rbind(c(0,0,data_tmp$Fecundity),survival.matrix))
+  
+  lambda[i]<-reg_result[1]
+  
+}
+
+lambda
+summary(lambda)
+
+#add plate names
+plates<-levels(lambda.data$Plate) ##list of plates
+splitLambda<-strsplit(plates, " ") #Split the list of plates by empty space
+matrix<-as.data.frame(matrix(unlist(splitLambda),ncol=3,byrow=T)) ##to separate out the 3 components of "Plate" and make into a dataframe having these 3 components as the columns 
+colnames(matrix)<-c("Strain","UV.trt","Plate.Id")
+head(matrix)
+
+##to remove the first 50% values that are NAs (due to non-perfect coding of the loop)
+lambda<-as.data.frame(lambda)[(length(lambda)/2+1):length(lambda),] #i.e. removes half the length, adds on one, to capture all of the data that is not NA and then makes it into a dataframe
+
+lambda.final<-cbind(matrix,lambda) ##to organise the calculated lambdas into dataframe format together with the information on their plateID, strain and UV.trt
+
+lambda.final<-as.data.frame(lambda.final)
+head(lambda.final)
+str(lambda.final)
+
+lambda.final$Strain<-as.factor(lambda.final$Strain)
+lambda.final$UV.trt<-as.factor(lambda.final$UV.trt)
+lambda.final$Plate.Id<-as.factor(lambda.final$Plate.Id)
+str(lambda.final)
+
+###Plot fitness using DABESTR package
+library(dplyr)
+library(dabestr)
+library(tidyr)
+library(ggthemes)
+
+lambda.final$UVRNAi<-paste(lambda.final$UV.trt,lambda.final$Strain)
+head(lambda.final)
+str(lambda.final)
+lambda.final$UVRNAi<-as.factor(lambda.final$UVRNAi)
+str(lambda.final)
+
+lambda.combo <-
+  lambda.final %>%
+  dabest(UVRNAi,lambda,
+         idx = list(c("non-UV ev","non-UV daf-2"),
+                    c("UV ev","UV daf-2")))
+  
+lambda.combo.plot<-plot(lambda.combo,float.contrast=FALSE,axes.title.fontsize=14, rawplot.ylabel="Fitness \n (lambda)", effsize.ylabel = "Mean\n difference", rawplot.markersize=1, tick.fontsize=12,palette=c("red","blue","red","blue"))
+
+lambda.combo.plot
+
+###Lambda analysis
+
+m1.lambda<-lm(lambda~Strain*UV.trt,data=lambda.final) 
+anova(m1.lambda) 
+summary(m1.lambda) #non-significant strain x UV interaction
+
+m2.lambda<-lm(lambda~Strain+UV.trt,data=lambda.final) 
+anova(m2.lambda) 
+summary(m2.lambda) #UV ns, strain signif
+
+anova(m1.lambda,m2.lambda) #fine
+
+m3.lambda<-lm(lambda~Strain,data=lambda.final) 
+anova(m3.lambda) 
+summary(m3.lambda)
+
+anova(m2.lambda,m3.lambda) #fine
+
+
+##Survival analysis of extinction data for mutation accumulation experiment
+
+###load in data
+
+###Combined, all N2, UV x strain x block  
+Model51<-coxph(Surv(MA3N2combo$Age.at.death,MA3N2combo$Status)~MA3N2combo$Strain*MA3N2combo$UV*MA3N2combo$Block)
+summary(Model51) 
+Model52<-coxph(Surv(MA3N2combo$Age.at.death,MA3N2combo$Status)~MA3N2combo$Strain+MA3N2combo$UV+MA3N2combo$Block+MA3N2combo$Strain:MA3N2combo$UV+MA3N2combo$UV:MA3N2combo$Block+MA3N2combo$Strain:MA3N2combo$Block)
+summary(Model52) 
+Model53<-coxph(Surv(MA3N2combo$Age.at.death,MA3N2combo$Status)~MA3N2combo$Strain+MA3N2combo$UV+MA3N2combo$Block+MA3N2combo$Strain:MA3N2combo$UV+MA3N2combo$UV:MA3N2combo$Block)
+summary(Model53) 
+Model54<-coxph(Surv(MA3N2combo$Age.at.death,MA3N2combo$Status)~MA3N2combo$Strain+MA3N2combo$UV+MA3N2combo$Block+MA3N2combo$Strain:MA3N2combo$UV)
+summary(Model54)
+Model55<-coxph(Surv(MA3N2combo$Age.at.death,MA3N2combo$Status)~MA3N2combo$Strain+MA3N2combo$UV+MA3N2combo$Block)
+summary(Model55) 
+AICtab(Model51,Model52,Model53,Model54,Model55)
+Model56<-coxph(Surv(MA3N2combo$Age.at.death,MA3N2combo$Status)~MA3N2combo$Strain+MA3N2combo$UV)
+summary(Model56) 
+AICtab(Model55,Model56) 
+AICtab(Model51,Model52,Model53,Model54,Model55,Model56) 
+
+###Combined, N2 + UV, e.v. vs daf-2 RNAi 
+Model1<-coxph(Surv(MA3N2combo$Age.at.death[MA3N2combo$UV==1],MA3N2combo$Status[MA3N2combo$UV==1])~MA3N2combo$Strain[MA3N2combo$UV==1]*MA3N2combo$Block[MA3N2combo$UV==1])  
+summary(Model1) 
+Model2<-coxph(Surv(MA3N2combo$Age.at.death[MA3N2combo$UV==1],MA3N2combo$Status[MA3N2combo$UV==1])~MA3N2combo$Strain[MA3N2combo$UV==1]+MA3N2combo$Block[MA3N2combo$UV==1])  
+summary(Model2) 
+Model3<-coxph(Surv(MA3N2combo$Age.at.death[MA3N2combo$UV==1],MA3N2combo$Status[MA3N2combo$UV==1])~MA3N2combo$Strain[MA3N2combo$UV==1])  
+summary(Model3) 
+AICtab(Model1,Model2,Model3)
+
+###Combined, N2, e.v. vs daf-2 RNAi  
+Model11<-coxph(Surv(MA3N2combo$Age.at.death[MA3N2combo$UV==0],MA3N2combo$Status[MA3N2combo$UV==0])~MA3N2combo$Strain[MA3N2combo$UV==0]*MA3N2combo$Block[MA3N2combo$UV==0]) 
+summary(Model11) 
+Model12<-coxph(Surv(MA3N2combo$Age.at.death[MA3N2combo$UV==0],MA3N2combo$Status[MA3N2combo$UV==0])~MA3N2combo$Strain[MA3N2combo$UV==0]+MA3N2combo$Block[MA3N2combo$UV==0])  
+summary(Model12) 
+Model13<-coxph(Surv(MA3N2combo$Age.at.death[MA3N2combo$UV==0],MA3N2combo$Status[MA3N2combo$UV==0])~MA3N2combo$Strain[MA3N2combo$UV==0])  
+summary(Model13) 
+AICtab(Model11,Model12,Model13)
+
+###Combined, all hrde-1, UV x strain x block  
+Model61<-coxph(Surv(MA3hrde1combo$Age.at.death,MA3hrde1combo$Status)~MA3hrde1combo$Strain*MA3hrde1combo$UV*MA3hrde1combo$Block)
+summary(Model61) 
+Model62<-coxph(Surv(MA3hrde1combo$Age.at.death,MA3hrde1combo$Status)~MA3hrde1combo$Strain+MA3hrde1combo$UV+MA3hrde1combo$Block+MA3hrde1combo$Strain:MA3hrde1combo$UV+MA3hrde1combo$UV:MA3hrde1combo$Block+MA3hrde1combo$Strain:MA3hrde1combo$Block)
+summary(Model62) 
+Model63<-coxph(Surv(MA3hrde1combo$Age.at.death,MA3hrde1combo$Status)~MA3hrde1combo$Strain+MA3hrde1combo$UV+MA3hrde1combo$Block+MA3hrde1combo$Strain:MA3hrde1combo$UV+MA3hrde1combo$Strain:MA3hrde1combo$Block)
+summary(Model63) 
+Model64<-coxph(Surv(MA3hrde1combo$Age.at.death,MA3hrde1combo$Status)~MA3hrde1combo$Strain+MA3hrde1combo$UV+MA3hrde1combo$Block+MA3hrde1combo$Strain:MA3hrde1combo$UV)
+summary(Model64) 
+AICtab(Model61,Model62,Model63,Model64)
+Model64i<-coxph(Surv(MA3hrde1combo$Age.at.death,MA3hrde1combo$Status)~MA3hrde1combo$Strain+MA3hrde1combo$UV+MA3hrde1combo$Block+MA3hrde1combo$Strain:MA3hrde1combo$Block)
+summary(Model64i) 
+AICtab(Model61,Model62,Model63,Model64,Model64i)
+Model65<-coxph(Surv(MA3hrde1combo$Age.at.death,MA3hrde1combo$Status)~MA3hrde1combo$Strain+MA3hrde1combo$UV+MA3hrde1combo$Block)
+summary(Model65) #take out block
+AICtab(Model61,Model62,Model63,Model64,Model65) 
+Model66<-coxph(Surv(MA3hrde1combo$Age.at.death,MA3hrde1combo$Status)~MA3hrde1combo$Strain+MA3hrde1combo$UV)
+summary(Model66) 
+AICtab(Model65,Model66) 
+
+##Age-specific reproduction analysis for life history assay of MA lines at generation 20
+###load in data, same packages as above
+
+###Poisson
+p1<-glmmTMB(repr.D1to4$Off.count~repr.D1to4$Strain*repr.D1to4$UV.trt*repr.D1to4$Day+repr.D1to4$Strain*repr.D1to4$UV.trt*I(repr.D1to4$Day^2)+(1|repr.D1to4$Plate.Id)+(1|repr.D1to4$Experimenter)+(1|repr.D1to4$Block),family='poisson') #full model
+summary(p1) 
+p2<-glmmTMB(repr.D1to4$Off.count~repr.D1to4$Strain*repr.D1to4$UV.trt*repr.D1to4$Day+repr.D1to4$Strain:repr.D1to4$UV.trt+repr.D1to4$Strain:repr.D1to4$Day+repr.D1to4$UV.trt:repr.D1to4$Day+repr.D1to4$UV.trt:I(repr.D1to4$Day^2)+repr.D1to4$Strain:I(repr.D1to4$Day^2)+repr.D1to4$Strain+repr.D1to4$UV.trt+repr.D1to4$Day+I(repr.D1to4$Day^2)+(1|repr.D1to4$Plate.Id)+(1|repr.D1to4$Experimenter)+(1|repr.D1to4$Block),family='poisson') 
+summary(p2)
+anova(p1,p2) 
+AICtab(p1,p2)
+AICctab(p1,p2) 
+
+##test Poisson model for ZI
+simulationOuput <- simulateResiduals(fittedModel = p1, n = 1000) 
+testZeroInflation(s1)
+
+###Zero-Inflated Poisson
+zip1<-glmmTMB(repr.D1to4$Off.count~repr.D1to4$Strain*repr.D1to4$UV.trt*repr.D1to4$Day+repr.D1to4$Strain*repr.D1to4$UV.trt*I(repr.D1to4$Day^2)+(1|repr.D1to4$Plate.Id)+(1|repr.D1to4$Experimenter)+(1|repr.D1to4$Block),zi=~repr.D1to4$Day+I(repr.D1to4$Day^2),family='poisson') 
+summary(zip1)
+AICtab(p1,zip1)
+AICctab(p1,zip1) #ZIP much better than P
+zip2<-glmmTMB(repr.D1to4$Off.count~repr.D1to4$Strain*repr.D1to4$UV.trt*repr.D1to4$Day+repr.D1to4$UV.trt:I(repr.D1to4$Day^2)+repr.D1to4$Strain:I(repr.D1to4$Day^2)+I(repr.D1to4$Day^2)+(1|repr.D1to4$Plate.Id)+(1|repr.D1to4$Experimenter)+(1|repr.D1to4$Block),zi=~repr.D1to4$Day,family='poisson') 
+summary(zip2)
+AICtab(zip1,zip2) 
+
+###Generalised Poisson (GP)
+gp1<-glmmTMB(repr.D1to4$Off.count~repr.D1to4$Strain*repr.D1to4$UV.trt*repr.D1to4$Day+repr.D1to4$Strain*repr.D1to4$UV.trt*I(repr.D1to4$Day^2)+(1|repr.D1to4$Plate.Id)+(1|repr.D1to4$Experimenter)+(1|repr.D1to4$Block), family='genpois') 
+summary(gp1) 
+AICtab(zip1,gp1) 
+gp2<-glmmTMB(repr.D1to4$Off.count~repr.D1to4$Strain*repr.D1to4$UV.trt*I(repr.D1to4$Day^2)+repr.D1to4$Strain:repr.D1to4$Day+repr.D1to4$UV.trt:repr.D1to4$Day+repr.D1to4$Day+(1|repr.D1to4$Plate.Id)+(1|repr.D1to4$Experimenter)+(1|repr.D1to4$Block), family='genpois')
+summary(gp2)
+anova(gp1,gp2) 
+AICtab(gp1,gp2)
+AICctab(gp1,gp2) 
+gp3<-glmmTMB(repr.D1to4$Off.count~repr.D1to4$Strain:repr.D1to4$UV.trt+repr.D1to4$Strain:repr.D1to4$Day+repr.D1to4$UV.trt:repr.D1to4$Day+repr.D1to4$UV.trt:I(repr.D1to4$Day^2)+repr.D1to4$Strain:I(repr.D1to4$Day^2)+repr.D1to4$Strain+repr.D1to4$UV.trt+repr.D1to4$Day+I(repr.D1to4$Day^2)+(1|repr.D1to4$Plate.Id)+(1|repr.D1to4$Experimenter)+(1|repr.D1to4$Block),family='genpois') 
+summary(gp3) 
+AICtab(gp2,gp3) 
+
+###Check for (under-)dispersion of top model - still not working! 
+simulationOutput <- simulateResiduals(fittedModel = gp3, n = 1000) #this takes > 5 min, 1000 simulations gives higher precision than the default of n=250 
+testDispersion(simulationOutput = simulationOutput, alternative ="two.sided")
+
+###Zero-Inflated GP
+zigp1<-glmmTMB(repr.D1to4$Off.count~repr.D1to4$Strain*repr.D1to4$UV.trt*repr.D1to4$Day+repr.D1to4$Strain*repr.D1to4$UV.trt*I(repr.D1to4$Day^2)+(1|repr.D1to4$Plate.Id)+(1|repr.D1to4$Experimenter)+(1|repr.D1to4$Block),zi=~repr.D1to4$Day+I(repr.D1to4$Day^2),family='genpois') 
+summary(zigp1) 
+AICtab(gp1,zigp1) 
+zigp2<-glmmTMB(repr.D1to4$Off.count~repr.D1to4$Strain*repr.D1to4$UV.trt*repr.D1to4$Day+repr.D1to4$Strain*repr.D1to4$UV.trt*I(repr.D1to4$Day^2)+(1|repr.D1to4$Plate.Id)+(1|repr.D1to4$Experimenter)+(1|repr.D1to4$Block),zi=~repr.D1to4$Day,family='genpois') 
+summary(zigp2) 
+AICtab(zigp1,zigp2) 
+zigp3<-glmmTMB(repr.D1to4$Off.count~repr.D1to4$Strain*repr.D1to4$UV.trt*repr.D1to4$Day+repr.D1to4$Strain*repr.D1to4$UV.trt*I(repr.D1to4$Day^2)+(1|repr.D1to4$Plate.Id)+(1|repr.D1to4$Experimenter)+(1|repr.D1to4$Block),zi=~1,family='genpois') 
+summary(zigp3) 
+anova(zigp2,zigp3)
+AICtab(zigp2,zigp3)
+AICctab(zigp2,zigp3) 
+zigp4<-glmmTMB(repr.D1to4$Off.count~repr.D1to4$Strain*repr.D1to4$UV.trt*I(repr.D1to4$Day^2)+repr.D1to4$Strain:repr.D1to4$Day+repr.D1to4$UV.trt:repr.D1to4$Day+repr.D1to4$Day+(1|repr.D1to4$Plate.Id)+(1|repr.D1to4$Experimenter)+(1|repr.D1to4$Block),zi=~1,family='genpois') 
+summary(zigp4)
+anova(zigp3,zigp4)
+AICtab(zigp3,zigp4) 
+zigp5<-glmmTMB(repr.D1to4$Off.count~repr.D1to4$Strain*repr.D1to4$UV.trt+repr.D1to4$Strain*I(repr.D1to4$Day^2)+repr.D1to4$UV.trt*I(repr.D1to4$Day^2)+repr.D1to4$Strain*repr.D1to4$Day+repr.D1to4$UV.trt*repr.D1to4$Day+(1|repr.D1to4$Plate.Id)+(1|repr.D1to4$Experimenter)+(1|repr.D1to4$Block),zi=~1,family='genpois') 
+summary(zigp5)
+anova(zigp4,zigp5)
+AICtab(zigp4,zigp5)
+##Compare all models so far
+AICtab(p1,p2,zip1,zip2,gp1,gp2,gp3,zigp1,zigp2,zigp3,zigp4,zigp5)
+AICctab(p1,p2,zip1,zip2,gp1,gp2,gp3,zigp1,zigp2,zigp3,zigp4,zigp5) 
+summary(zigp3)
+
+###As there was a significant interaction, analyse data for UV and non-UV separately, followed same order as above.
+
+##Fitness calculation and analysis for life history assay of MA lines at generation 20
+###load in data, same packages as above, followed same code as for intergenerational experiment above.
+
+##Egg size analysis for life history assay of MA lines at generation 20
+
+###Load in data
+g21<-lm(Egg.size~Strain*UV.trt,data=MA3egg) 
+summary(g21) #significant strain x UV interaction
+anova(g21)
+#subset as signif interaction
+UV<-subset(MA3egg, UV.trt=="UV")
+nonUV<-subset(MA3egg, UV.trt=="non-UV")
+###UV
+g31<-lm(Egg.size~Strain,data=UV)
+summary(g31) 
+anova(g31)
+###non-UV
+g41<-lm(Egg.size~Strain,data=nonUV)
+summary(g41) 
+anova(g41)
+
+
+##Locomotion analysis following heat-shock for life history assay of MA lines at generation 20
+
+###load in data
+###analyse binary data with binomial glm
+###3h post heat-shock
+m11<-glm(Loco3mod~Strain*UV.trt,family=binomial,data=MA3loco)
+summary(m11) 
+m21<-glm(Loco3mod~Strain*UV.trt,family=binomial(link="probit"),data=MA3loco)
+summary(m21)
+m31<-glm(Loco3mod~Strain*UV.trt,family=binomial(link="cloglog"),data=MA3loco)
+summary(m31)
+m41<-glm(Loco3mod~Strain*UV.trt,family=quasibinomial,data=MA3loco)
+summary(m41)
+m42<-glm(Loco3mod~Strain*UV.trt,family=quasibinomial(link="probit"),data=MA3loco)
+summary(m42)
+m43<-glm(Loco3mod~Strain*UV.trt,family=quasibinomial(link="cloglog"),data=MA3loco)
+summary(m43)
+AICtab(m11,m21,m31,m41,m42,m43)
+
+###24h post heat-shock
+m11<-glm(Loco24mod~Strain*UV.trt,family=binomial,data=MA3loco)
+summary(m11) 
+m21<-glm(Loco24mod~Strain*UV.trt,family=binomial(link="probit"),data=MA3loco)
+summary(m21)
+m31<-glm(Loco24mod~Strain*UV.trt,family=binomial(link="cloglog"),data=MA3loco)
+summary(m31)
+m41<-glm(Loco24mod~Strain*UV.trt,family=quasibinomial,data=MA3loco)
+summary(m41)
+m42<-glm(Loco24mod~Strain*UV.trt,family=quasibinomial(link="probit"),data=MA3loco)
+summary(m42)
+m43<-glm(Loco3mod~Strain*UV.trt,family=quasibinomial(link="cloglog"),data=MA3loco)
+summary(m43)
+AICtab(m11,m21,m31,m41,m42,m43) 
+m11a<-glm(Loco24mod~Strain+UV.trt,family=binomial,data=MA3loco)
+summary(m11a) 
+anova(m11,m11a,test="Chi")
+m11b<-glm(Loco24mod~UV.trt,family=binomial,data=MA3loco)
+summary(m11b) 
+anova(m11a,m11b,test="Chi")
+
+##Transgen daf-2 RNAi age-specific reproduction analysis for F1, F2, F3 offspring generations
+###load in data
+###subset by generation
+F1<-subset(repr.D1to4, Generation=="F1")
+F2<-subset(repr.D1to4, Generation=="F2")
+F3<-subset(repr.D1to4, Generation=="F3")
+
+###same pattern of analysis for each generation
+###Poisson
+p1<-glmmTMB(F1$Off.count~F1$Strain*F1$Genotype*F1$Day+F1$Strain*F1$Genotype*I(F1$Day^2)+(1|F1$Plate.Id)+(1|F1$Observer),family='poisson') #full model
+summary(p1) 
+p2<-glmmTMB(F1$Off.count~F1$Strain*F1$Genotype*F1$Day+F1$Strain:F1$Genotype+F1$Strain:F1$Day+F1$Genotype:F1$Day+F1$Genotype:I(F1$Day^2)+F1$Strain:I(F1$Day^2)+F1$Strain+F1$Genotype+F1$Day+I(F1$Day^2)+(1|F1$Plate.Id)+(1|F1$Observer),family='poisson') 
+summary(p2)
+anova(p1,p2) 
+AICtab(p1,p2)
+AICctab(p1,p2) 
+p3<-glmmTMB(F1$Off.count~F1$Strain:F1$Genotype+F1$Strain:F1$Day+F1$Genotype:F1$Day+F1$Genotype:I(F1$Day^2)+F1$Strain:I(F1$Day^2)+F1$Strain+F1$Genotype+F1$Day+I(F1$Day^2)+(1|F1$Plate.Id)+(1|F1$Observer),family='poisson') 
+summary(p3) 
+anova(p2,p3) 
+AICtab(p2,p3)
+AICctab(p2,p3) 
+##test Poisson model for ZI
+s1 <- simulateResiduals(fittedModel=p3,n=1000) 
+testZeroInflation(s1)
+
+###Zero-Inflated Poisson
+zip1<-glmmTMB(F1$Off.count~F1$Strain*F1$Genotype*F1$Day+F1$Strain*F1$Genotype*I(F1$Day^2)+(1|F1$Plate.Id)+(1|F1$Observer),zi=~F1$Day+I(F1$Day^2),family='poisson')
+summary(zip1) 
+AICtab(p3,zip1)
+AICctab(p3,zip1) 
+zip2<-glmmTMB(F1$Off.count~F1$Strain*F1$Genotype*F1$Day+F1$Strain*F1$Genotype*I(F1$Day^2)+(1|F1$Plate.Id)+(1|F1$Observer),zi=~F1$Day,family='poisson') 
+summary(zip2)
+AICtab(zip1,zip2) 
+zip3<-glmmTMB(F1$Off.count~F1$Strain*F1$Genotype*F1$Day+F1$Strain:F1$Genotype+F1$Strain:F1$Day+F1$Genotype:F1$Day+F1$Genotype:I(F1$Day^2)+F1$Strain:I(F1$Day^2)+F1$Strain+F1$Genotype+F1$Day+I(F1$Day^2)+(1|F1$Plate.Id)+(1|F1$Observer),zi=~F1$Day,family='poisson') 
+summary(zip3)
+AICtab(zip2,zip3) 
+zip4<-glmmTMB(F1$Off.count~F1$Strain:F1$Genotype+F1$Strain:F1$Day+F1$Genotype:F1$Day+F1$Genotype:I(F1$Day^2)+F1$Strain:I(F1$Day^2)+F1$Strain+F1$Genotype+F1$Day+I(F1$Day^2)+(1|F1$Plate.Id)+(1|F1$Observer),zi=~F1$Day,family='poisson') 
+summary(zip4) 
+AICtab(zip3,zip4)
+##Compare Poisson and ZIP models
+AICtab(p1,p2,p3,zip1,zip2,zip3,zip4)
+AICctab(p1,p2,p3,zip1,zip2,zip3,zip4) #zip4 is best, ZIP better than P
+
+##Check for dispersion of top model
+simulationOutput <- simulateResiduals(fittedModel = zip4, n = 1000) #this takes > 5 min, 1000 simulations gives higher precision than the default of n=250 
+testDispersion(simulationOutput = simulationOutput, alternative ="two.sided") 
+
+###Generalised Poisson (GP)
+gp1<-glmmTMB(F1$Off.count~F1$Strain*F1$Genotype*F1$Day+F1$Strain*F1$Genotype*I(F1$Day^2)+(1|F1$Plate.Id)+(1|F1$Observer), family='genpois')
+summary(gp1)
+AICtab(zip4,gp1) 
+gp2<-glmmTMB(F1$Off.count~F1$Strain*F1$Genotype*F1$Day+F1$Strain:F1$Genotype+F1$Strain:F1$Day+F1$Genotype:F1$Day+F1$Genotype:I(F1$Day^2)+F1$Strain:I(F1$Day^2)+F1$Strain+F1$Genotype+F1$Day+I(F1$Day^2)+(1|F1$Plate.Id)+(1|F1$Observer), family='genpois') 
+summary(gp2)
+anova(gp1,gp2) 
+AICtab(gp1,gp2)
+AICctab(gp1,gp2) 
+gp3<-glmmTMB(F1$Off.count~F1$Strain:F1$Genotype+F1$Strain:F1$Day+F1$Genotype:F1$Day+F1$Genotype:I(F1$Day^2)+F1$Strain:I(F1$Day^2)+F1$Strain+F1$Genotype+F1$Day+I(F1$Day^2)+(1|F1$Plate.Id)+(1|F1$Observer),family='genpois') 
+summary(gp3) 
+AICtab(gp2,gp3) 
+gp4<-glmmTMB(F1$Off.count~F1$Strain:F1$Day+F1$Genotype:F1$Day+F1$Genotype:I(F1$Day^2)+F1$Strain:I(F1$Day^2)+F1$Strain+F1$Genotype+F1$Day+I(F1$Day^2)+(1|F1$Plate.Id)+(1|F1$Observer),family='genpois') 
+summary(gp4)
+anova(gp3,gp4) 
+AICtab(gp3,gp4) 
+gp4a<-glmmTMB(F1$Off.count~F1$Strain:F1$Genotype+F1$Genotype:F1$Day+F1$Genotype:I(F1$Day^2)+F1$Strain:I(F1$Day^2)+F1$Strain+F1$Genotype+F1$Day+I(F1$Day^2)+(1|F1$Plate.Id)+(1|F1$Observer),family='genpois') 
+summary(gp4a)
+anova(gp3,gp4a) #fine
+AICtab(gp3,gp4a) 
+
+###Zero-Inflated GP
+zigp1<-glmmTMB(F1$Off.count~F1$Strain*F1$Genotype*F1$Day+F1$Strain*F1$Genotype*I(F1$Day^2)+(1|F1$Plate.Id)+(1|F1$Observer),zi=~F1$Day+I(F1$Day^2),family='genpois') #zi with day and day^2, convergence problem
+summary(zigp1) 
+zigp2<-glmmTMB(F1$Off.count~F1$Strain*F1$Genotype*F1$Day+F1$Strain*F1$Genotype*I(F1$Day^2)+(1|F1$Plate.Id)+(1|F1$Observer),zi=~F1$Day,family='genpois') #try with just day in zi, ran fine
+summary(zigp2) 
+AICtab(gp3,zigp2) #ZIGP bit better than GP
+zigp3<-glmmTMB(F1$Off.count~F1$Strain*F1$Genotype*F1$Day+F1$Strain*F1$Genotype*I(F1$Day^2)+(1|F1$Plate.Id)+(1|F1$Observer),zi=~1,family='genpois') #try with just intercept in zi, ran fine
+summary(zigp3) 
+anova(zigp2,zigp3)
+AICtab(zigp2,zigp3)
+AICctab(zigp2,zigp3) 
+zigp4<-glmmTMB(F1$Off.count~F1$Strain:F1$Genotype+F1$Strain:F1$Day+F1$Genotype:F1$Day+F1$Genotype:I(F1$Day^2)+F1$Strain:I(F1$Day^2)+F1$Strain+F1$Genotype+F1$Day+I(F1$Day^2)+(1|F1$Plate.Id)+(1|F1$Observer),zi=~1,family='genpois') 
+summary(zigp4)
+anova(zigp3,zigp4)
+AICtab(zigp3,zigp4) 
+zigp5<-glmmTMB(F1$Off.count~F1$Strain:F1$Genotype+F1$Strain:F1$Day+F1$Genotype:F1$Day+F1$Genotype:I(F1$Day^2)+F1$Strain+F1$Genotype+F1$Day+I(F1$Day^2)+(1|F1$Plate.Id)+(1|F1$Observer),zi=~1,family='genpois') 
+summary(zigp5)
+anova(zigp4,zigp5)
+AICtab(zigp4,zigp5) 
+zigp6<-glmmTMB(F1$Off.count~F1$Strain:F1$Day+F1$Genotype:F1$Day+F1$Genotype:I(F1$Day^2)+F1$Strain+F1$Genotype+F1$Day+I(F1$Day^2)+(1|F1$Plate.Id)+(1|F1$Observer),zi=~1,family='genpois') 
+anova(zigp5,zigp6)
+AICtab(zigp5,zigp6) 
+##Compare all models so far
+AICtab(p1,p2,p3,zip1,zip2,zip3,zip4,gp1,gp2,gp3,gp4,gp4a,zigp2,zigp3,zigp4,zigp5,zigp6)
+AICctab(p1,p2,p3,zip1,zip2,zip3,zip4,gp1,gp2,gp3,gp4,gp4a,zigp2,zigp3,zigp4,zigp5,zigp6) 
